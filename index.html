@@ -370,6 +370,21 @@ function repRange(r){let m=String(r).match(/^(\d+)-(\d+)$/);if(m)return[+m[1],+m
 function e1rm(w,r){w=parseFloat(w);r=parseFloat(r);if(!w||!r)return 0;return r===1?w:w*(1+r/30);}
 function isBodyweightish(n){return /PULL-UP|CHIN-UP|DIP|PUSH-UP/.test(n);}
 
+
+// --- shared strength layer (cross-program suggestions; reads/writes swolequest.strength.v1, never touches program stores) ---
+const SQSTR='swolequest.strength.v1';
+function strLoad(){try{const s=JSON.parse(localStorage.getItem(SQSTR));if(s&&s.v===1&&s.ex)return s;}catch(e){} return {v:1,ex:{}};}
+function strKey(n){return String(n).toUpperCase().replace(/\([^)]*\)/g,'').replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim();}
+function strWrite(name,w,r,unit,src){
+  if(!(parseFloat(w)>0))return;
+  const s=strLoad();const k=strKey(name);if(!k)return;
+  const rec={w:parseFloat(w),r:parseFloat(r)||null,date:new Date().toISOString().slice(0,10),unit:unit||'lb',src:src};
+  const cur=s.ex[k];
+  if(!cur||rec.w>cur.w||rec.date>cur.date){s.ex[k]=rec;try{localStorage.setItem(SQSTR,JSON.stringify(s));}catch(e){}}
+}
+function strLookup(name){return strLoad().ex[strKey(name)]||null;}
+function strToLast(name){const r=strLookup(name);return r?{bestW:r.w,allTop:false,sets:[],date:r.date,src:r.src}:null;}
+
 // --- progression engine ---
 // Primaries: %1RM fixed by the week (progression is periodized in). Accessories: double progression -
 // add reps to the top of the range, then add the minimum weight and drop back to the bottom.
@@ -399,10 +414,13 @@ function suggestedLine(ex){
   const t=targetWeight(ex);
   if(t)return 'SUGGESTED TODAY: '+t.label.toUpperCase()+' PER SET';
   if(ex.p&&ex.l)return 'SUGGESTED TODAY: SET YOUR '+ex.l.toUpperCase()+' 1RM IN SETTINGS TO GET LOADS';
-  const last=state.lastByEx[ex.n];const rr=repRange(ex.r);
+  const own=state.lastByEx[ex.n];const rr=repRange(ex.r);
+  const sh=own?null:strToLast(ex.n);
+  const last=own||sh;
   if(!last||!rr||!last.bestW)return null;
   const w=last.bestW;
   const inc=isBodyweightish(ex.n)?(state.set.unit==='kg'?1.25:2.5):(state.set.unit==='kg'?2.5:5);
+  if(sh)return 'SUGGESTED TODAY: '+fmtW(w)+' '+state.set.unit.toUpperCase()+' (FROM YOUR '+sh.src+' LOG - LOG IT HERE TO START PROGRESSION)';
   if(last.allTop)return 'SUGGESTED TODAY: '+fmtW(w+inc)+' '+state.set.unit.toUpperCase()+' (UP FROM '+fmtW(w)+' - YOU HIT THE TOP OF THE RANGE)';
   return 'SUGGESTED TODAY: '+fmtW(w)+' '+state.set.unit.toUpperCase()+' (ADD REPS UNTIL EVERY SET HITS '+rr[1]+')';
 }
@@ -544,6 +562,7 @@ function completeWorkout(){
       }else{
         state.lastByEx[ex.n]={sets:sets.map(s=>({w:s.w,r:s.r})),date:todayStr()};
       }
+      const _bw=Math.max(0,...sets.map(x=>parseFloat(x.w)||0));strWrite(ex.n,_bw,null,state.set.unit,'PURE BB');
     }
   });
   if(!exLog.length){toast('Log at least one set first');return;}
