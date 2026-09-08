@@ -82,6 +82,7 @@ a{color:var(--salmon)}
 .sets .setnum{font-family:var(--disp);color:var(--muted);font-size:13px;width:34px}
 .setdone{appearance:none;width:26px;height:26px;border:2px solid var(--grey);border-radius:6px;background:transparent;display:block}
 .setdone:checked{background:var(--red);border-color:var(--red);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4'%3E%3Cpath d='M5 13l4 4L19 7'/%3E%3C/svg%3E");background-size:16px;background-position:center;background-repeat:no-repeat}
+.sugline{font-size:12.5px;font-weight:700;color:var(--salmon);margin-top:8px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .progline{font-size:12.5px;color:var(--salmon);margin-top:8px}
 .lastline{font-size:12px;color:var(--muted);margin-top:4px}
 /* week view */
@@ -393,6 +394,19 @@ function lastLine(ex){
   return 'Last ('+last.date+'): '+s;
 }
 
+
+function suggestedLine(ex){
+  const t=targetWeight(ex);
+  if(t)return 'SUGGESTED TODAY: '+t.label.toUpperCase()+' PER SET';
+  if(ex.p&&ex.l)return 'SUGGESTED TODAY: SET YOUR '+ex.l.toUpperCase()+' 1RM IN SETTINGS TO GET LOADS';
+  const last=state.lastByEx[ex.n];const rr=repRange(ex.r);
+  if(!last||!rr||!last.bestW)return null;
+  const w=last.bestW;
+  const inc=isBodyweightish(ex.n)?(state.set.unit==='kg'?1.25:2.5):(state.set.unit==='kg'?2.5:5);
+  if(last.allTop)return 'SUGGESTED TODAY: '+fmtW(w+inc)+' '+state.set.unit.toUpperCase()+' (UP FROM '+fmtW(w)+' - YOU HIT THE TOP OF THE RANGE)';
+  return 'SUGGESTED TODAY: '+fmtW(w)+' '+state.set.unit.toUpperCase()+' (ADD REPS UNTIL EVERY SET HITS '+rr[1]+')';
+}
+
 // --- rendering helpers ---
 function schemeChips(ex){
   let h='';
@@ -457,6 +471,7 @@ function renderWorkout(){
     h+='<div class="excard'+(ex.top?' top':'')+'">';
     h+='<div class="exhead"><div class="exname">'+(ex.sup?'<span class="suptag">'+ex.sup+'</span>':'')+esc(ex.n)+(ex.opt?' <span class="opttag">(optional)</span>':'')+(ex.weak?' <span class="opttag">(weak point)</span>':'')+'</div></div>';
     h+='<div class="exscheme">'+schemeChips(ex)+'</div>';
+    const sl=suggestedLine(ex);if(sl)h+='<div class="sugline">'+esc(sl)+'</div>';
     if(ex.tech&&ex.tech!=='N/A')h+='<div class="techline"><b>Last set:</b> '+esc(ex.tech)+'</div>';
     if(ex.vars){
       const vc=varChoice(ex);
