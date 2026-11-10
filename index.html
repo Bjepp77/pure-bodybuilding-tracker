@@ -350,9 +350,26 @@ for(let wk=1; wk<=10; wk++){
 // ===== APP =====
 const LS='pbbfb-v1';
 let state=load();
-function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.v===1)return s;}catch(e){}
-  return {v:1,pos:0,done:{},draft:{},lastByEx:{},history:[],vars:{},set:{unit:'lb',w10:'10A',rm:{squat:'',bench:'',deadlift:'',ohp:''}}};}
-function save(){localStorage.setItem(LS,JSON.stringify(state));}
+function defState(){return {v:1,pos:0,done:{},draft:{},lastByEx:{},history:[],vars:{},set:{unit:'lb',w10:'10A',rm:{squat:'',bench:'',deadlift:'',ohp:''}}};}
+// merge a saved or imported state over the defaults; null if the shape is unusable
+function normState(s){
+  const isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+  if(!isO(s)||s.v!==1)return null;
+  for(const k of ['done','draft','lastByEx','vars','set'])if(s[k]!==undefined&&!isO(s[k]))return null;
+  if(s.history!==undefined&&!Array.isArray(s.history))return null;
+  if(s.pos!==undefined&&!(Number.isInteger(s.pos)&&s.pos>=0))return null;
+  if(s.history&&!s.history.every(h=>isO(h)&&Array.isArray(h.ex)&&h.ex.every(e=>isO(e)&&Array.isArray(e.sets))))return null;
+  if(s.lastByEx&&!Object.values(s.lastByEx).every(l=>isO(l)&&Array.isArray(l.sets)))return null;
+  if(s.draft&&!Object.values(s.draft).every(d=>isO(d)&&Object.values(d).every(e=>isO(e)&&Array.isArray(e.vals)&&Array.isArray(e.done))))return null;
+  const d=defState(),o=Object.assign(d,s);
+  o.set=Object.assign(defState().set,s.set||{});
+  o.set.rm=Object.assign(defState().set.rm,isO(o.set.rm)?o.set.rm:{});
+  if(o.set.unit!=='lb'&&o.set.unit!=='kg')o.set.unit='lb';
+  return o;
+}
+function load(){try{const s=normState(JSON.parse(localStorage.getItem(LS)));if(s)return s;}catch(e){}
+  return defState();}
+function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){setTimeout(function(){try{toast('Could not save (storage full or blocked) - export your data now');}catch(_){}},400);}}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2400);}
 
@@ -376,7 +393,11 @@ function targetWeight(ex){
   const wlo=rnd(rm*lo/100),whi=rnd(rm*hi/100);
   return lo===hi?{w:wlo,label:fmtW(wlo)+' '+state.set.unit}:{w:wlo,whi,label:fmtW(wlo)+'-'+fmtW(whi)+' '+state.set.unit};
 }
-function repRange(r){let m=String(r).match(/^(\d+)-(\d+)$/);if(m)return[+m[1],+m[2]];m=String(r).match(/^(\d+)$/);if(m)return[+m[1],+m[1]];return null;}
+function repRange(r){let m=String(r).match(/^(\d+)-(\d+)$/);if(m)return[+m[1],+m[2]];m=String(r).match(/^(\d+)$/);if(m)return[+m[1],+m[1]];
+  // looser text: "6-8 per leg", "8-10 + 4-6" (first range), "4,6,8" / "5,4,3+" (lowest to highest), "8 /leg"
+  const s=String(r).trim();m=s.match(/^(\d+)\s*-\s*(\d+)\b/);if(m)return[+m[1],+m[2]];
+  if(/^[\d,+\s]+$/.test(s)&&/,/.test(s)){const n=s.match(/\d+/g).map(Number);return[Math.min(...n),Math.max(...n)];}
+  m=s.match(/^(\d+)\s*(?:\/|per\b|reps?\b|each\b)/i);if(m)return[+m[1],+m[1]];return null;}
 function e1rm(w,r){w=parseFloat(w);r=parseFloat(r);if(!w||!r)return 0;return r===1?w:w*(1+r/30);}
 function isBodyweightish(n){return /PULL-UP|CHIN-UP|DIP|PUSH-UP/.test(n);}
 
@@ -388,12 +409,13 @@ function strKey(n){return String(n).toUpperCase().replace(/\([^)]*\)/g,'').repla
 function strWrite(name,w,r,unit,src){
   if(!(parseFloat(w)>0))return;
   const s=strLoad();const k=strKey(name);if(!k)return;
-  const rec={w:parseFloat(w),r:parseFloat(r)||null,date:new Date().toISOString().slice(0,10),unit:unit||'lb',src:src};
+  const rec={w:parseFloat(w),r:parseFloat(r)||null,date:(function(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');})(),unit:unit||'lb',src:src};
   const cur=s.ex[k];
-  if(!cur||rec.w>cur.w||rec.date>cur.date){s.ex[k]=rec;try{localStorage.setItem(SQSTR,JSON.stringify(s));}catch(e){}}
+  if(!cur||rec.w>strConv(cur.w,cur.unit,rec.unit)||rec.date>cur.date){s.ex[k]=rec;try{localStorage.setItem(SQSTR,JSON.stringify(s));}catch(e){}}
 }
 function strLookup(name){return strLoad().ex[strKey(name)]||null;}
-function strToLast(name){const r=strLookup(name);return r?{bestW:r.w,allTop:false,sets:[],date:r.date,src:r.src}:null;}
+function strConv(w,from,to){from=from==='kg'?'kg':'lb';if(from===to)return w;return to==='kg'?w*0.45359237:w/0.45359237;}
+function strToLast(name){const r=strLookup(name);return r?{bestW:rnd(strConv(r.w,r.unit,state.set.unit)),allTop:false,sets:[],date:r.date,src:r.src}:null;}
 
 // --- progression engine ---
 // Primaries: %1RM fixed by the week (progression is periodized in). Accessories: double progression -
@@ -519,7 +541,7 @@ hb(['CABLE EXTERNAL ROTATION'],'Side-lying external rotation with a water bottle
 function hbwNorm(n){return String(n).toUpperCase().replace(/\s*\(.*?\)/g,'').replace(/\s+/g,' ').trim();}
 function homeBwFor(ex){var i,k,keys=[hbwNorm(ex.n)];if(ex.vars)ex.vars.forEach(function(v){keys.push(hbwNorm(v.label));});for(i=0;i<keys.length;i++){if(HOMEBW[keys[i]])return HOMEBW[keys[i]];}for(i=0;i<keys.length;i++){k=keys[i].replace(/ OR .*/,'');if(HOMEBW[k])return HOMEBW[k];}return null;}
 var RT={sec:0,left:0,at:0,t:null,label:''};
-function parseRest(s){if(!s)return 0;s=String(s);var m;if(/min/i.test(s)){m=s.match(/([\d.]+)/);return m?Math.round(parseFloat(m[1])*60):0;}m=s.match(/([\d.]+)/);return m?Math.round(parseFloat(m[1])):0;}
+function parseRest(s){if(!s)return 0;s=String(s);var n=s.match(/[\d.]+/g);if(!n)return 0;var v=Math.max.apply(null,n.map(parseFloat));return Math.round(/min/i.test(s)?v*60:v);}
 function exAt(xi){try{return weeks()[WO.wi].days[WO.di].ex[xi];}catch(e){return null;}}
 function rtEl(){var el=document.getElementById('restTimer');if(!el){el=document.createElement('div');el.id='restTimer';el.innerHTML='<div id="rtTxt" onclick="rtToggle(event)">REST --:--</div><div class="rtb"><button onclick="rtBump(event,30)">+30</button><button onclick="rtBump(event,-30)">-30</button><button onclick="rtClose(event)">&times;</button></div>';document.body.appendChild(el);}return el;}
 function timerPreset(xi){var ex=exAt(xi);if(!ex)return;var s=parseRest(ex.rest);if(s>0)rtSet(s,ex.n,false);}
@@ -530,7 +552,7 @@ function rtTick(){RT.left=Math.max(0,RT.sec-(Date.now()-RT.at)/1000);rtPaint();i
 function rtBeep(){try{var C=window.AudioContext||window.webkitAudioContext;var c=new C();var o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.setValueAtTime(.2,c.currentTime);o.start();o.stop(c.currentTime+.35);}catch(e){}}
 function rtPaint(){var t=document.getElementById('rtTxt');if(!t)return;if(RT.sec<=0){t.innerHTML='<span class="rtex">'+RT.label+'</span>';return;}var l=Math.ceil(RT.left),m=Math.floor(l/60),s=l%60;t.innerHTML=(RT.label?'<span class="rtex">'+RT.label+'</span>':'')+'REST '+m+':'+(s<10?'0':'')+s;}
 function rtToggle(e){e.stopPropagation();if(RT.sec<=0)return;if(RT.t){RT.left=Math.max(0,RT.sec-(Date.now()-RT.at)/1000);RT.sec=RT.left;rtStop();rtPaint();}else{RT.sec=RT.left;rtStart();}}
-function rtBump(e,n){e.stopPropagation();if(RT.t){RT.sec=Math.max(0,RT.sec+n);RT.at=Date.now();}else{RT.sec=Math.max(0,RT.sec+n);RT.left=RT.sec;}rtPaint();}
+function rtBump(e,n){e.stopPropagation();if(RT.t)RT.left=Math.max(0,RT.sec-(Date.now()-RT.at)/1000);RT.left=Math.max(0,RT.left+n);RT.sec=RT.left;RT.at=Date.now();rtPaint();}
 function rtClose(e){e.stopPropagation();rtStop();var el=document.getElementById('restTimer');if(el)el.classList.remove('show');el.classList.remove('done');}
 /* === END ALTERNATES + TIMER === */
 
@@ -603,15 +625,8 @@ function renderWorkout(){
     const nRows=ed.n||ex.s;
     h+='<table class="sets"><tr><th></th><th>Set</th><th>Weight ('+state.set.unit+')</th><th>Reps</th><th>Done</th></tr>';
     for(let i=0;i<nRows;i++){
-      const val=(ed.vals&&ed.vals[i])||null;
-      let pw='',pr='';
-      if(val){pw=val.w;pr=val.r;}
-      else{
-        const last=state.lastByEx[ex.n];
-        if(t&&t.w){pw=fmtW(t.w);pr=(repRange(ex.r)||['',''])[0];}
-        else if(last&&last.sets[i]){pw=last.sets[i].w;pr=last.sets[i].r;}
-        else{const rr=repRange(ex.r);pr=rr?rr[0]:'';}
-      }
+      const sv=shownVals(ex,ed,i);
+      const pw=sv.w,pr=sv.r;
       const done=ed.done&&ed.done[i];
       h+='<tr><td></td><td class="setnum">'+(i+1)+'</td>'+
         '<td><input inputmode="decimal" value="'+esc(pw==null?'':pw)+'" placeholder="-" onchange="setVal('+xi+','+i+',\'w\',this.value)"></td>'+
@@ -631,8 +646,22 @@ function draftFor(xi){
   if(!state.draft[key][xi])state.draft[key][xi]={vals:[],done:[],n:weeks()[WO.wi].days[WO.di].ex[xi].s};
   return state.draft[key][xi];
 }
-function setVal(xi,i,f,v){const ed=draftFor(xi);if(!ed.vals[i])ed.vals[i]={w:'',r:''};ed.vals[i][f]=v;save();}
-function setDone(xi,i,c){const ed=draftFor(xi);ed.done[i]=c;save();if(c){var _ex=exAt(xi);if(_ex){var _s=parseRest(_ex.rest);if(_s>0)rtSet(_s,_ex.n,true);else rtSet(0,'NO REST - GO!',false);}}}
+// numbers shown in a set row: what the user typed, else the pre-filled target / last-time value
+function shownVals(ex,ed,i){
+  const val=(ed.vals&&ed.vals[i])||null;
+  if(val)return {w:val.w,r:val.r};
+  const t=targetWeight(ex),last=state.lastByEx[ex.n];
+  if(t&&t.w)return {w:fmtW(t.w),r:(repRange(ex.r)||['',''])[0]};
+  if(last&&last.sets[i])return {w:last.sets[i].w,r:last.sets[i].r};
+  const rr=repRange(ex.r);return {w:'',r:rr?rr[0]:''};
+}
+function seedVals(xi,ed,i){
+  if(ed.vals[i])return;
+  const x=exAt(xi);const sv=x?shownVals(x,ed,i):{w:'',r:''};
+  ed.vals[i]={w:sv.w==null?'':sv.w,r:sv.r==null?'':sv.r};
+}
+function setVal(xi,i,f,v){const ed=draftFor(xi);seedVals(xi,ed,i);ed.vals[i][f]=v;save();}
+function setDone(xi,i,c){const ed=draftFor(xi);if(c)seedVals(xi,ed,i);ed.done[i]=c;save();if(c){var _ex=exAt(xi);if(_ex){var _s=parseRest(_ex.rest);if(_s>0)rtSet(_s,_ex.n,true);else rtSet(0,'NO REST - GO!',false);}}}
 function addSet(xi){const ed=draftFor(xi);ed.n=(ed.n||0)+1;save();renderWorkout();}
 function pickVar(n,label){state.vars[n]=label;save();renderWorkout();}
 function completeWorkout(){
@@ -643,7 +672,8 @@ function completeWorkout(){
     const ed=draft[xi];if(!ed)return;
     const sets=[];
     const n=ed.n||ex.s;
-    for(let i=0;i<n;i++){const v=(ed.vals&&ed.vals[i])||{w:'',r:''};const dn=ed.done&&ed.done[i];
+    for(let i=0;i<n;i++){let v=(ed.vals&&ed.vals[i])||{w:'',r:''};const dn=ed.done&&ed.done[i];
+      if(dn&&!v.w&&!v.r)v=shownVals(ex,{vals:[]},i);
       if(dn||v.w||v.r)sets.push({w:v.w,r:v.r,done:!!dn});}
     if(sets.length){
       exLog.push({n:ex.n,sets});
@@ -677,7 +707,7 @@ function renderWeek(){
   if(WKSEL>=ws.length)WKSEL=0;
   const w=ws[WKSEL];
   const it=cur();
-  let h='<div class="pagetop" style="padding:0 0 4px"><h2>Program</h2><span class="sub">11 weeks &middot; 5-6 days/wk</span></div>';
+  let h='<div class="pagetop" style="padding:0 0 4px"><h2>Program</h2><span class="sub">'+ws.length+' weeks &middot; '+ws[0].days.filter(x=>!x.rest).length+' days/wk</span></div>';
   h+='<div class="wktabs">'+ws.map((x,i)=>'<button class="wktab'+(i===WKSEL?' on':'')+'" onclick="selWeek('+i+')">'+esc(x.label)+'</button>').join('')+'</div>';
   if(w.blurb)h+='<div class="salmonband">'+esc(w.blurb)+'</div>';
   h+='<div class="small" style="margin:2px 0 8px">'+esc(w.kind)+' week</div>';
@@ -786,7 +816,15 @@ function exportData(){
 }
 function importData(){
   const box=document.getElementById('ioBox');if(!box||!box.value.trim()){toast('Paste a backup into the box first');return;}
-  try{const s=JSON.parse(box.value);if(!s||s.v!==1)throw 0;state=s;save();renderAll();toast('Backup restored');}catch(e){toast('That backup did not parse');}
+  let raw,s=null;
+  try{raw=JSON.parse(box.value);s=normState(raw);}catch(e){}
+  if(!s||!Array.isArray(raw.history)||!raw.done||typeof raw.done!=='object'){toast('That is not a backup from this tracker - nothing was changed');return;}
+  const names=new Set();weeks().forEach(w=>w.days.forEach(d=>d.ex.forEach(e=>names.add(e.n))));
+  if(s.history.length&&!s.history.some(h=>h.ex.some(e=>names.has(e.n)))){toast('That backup is from a different program - nothing was changed');return;}
+  if(!confirm('Replace everything on this device with this backup ('+s.history.length+' logged workouts)? Your current data will be lost.'))return;
+  const old=state;
+  try{state=s;save();renderAll();toast('Backup restored');}
+  catch(e){state=old;try{save();renderAll();}catch(e2){}toast('Import failed - your previous data was kept');}
 }
 function resetAll(){if(confirm('Delete all logs, settings and progress on this device?')){localStorage.removeItem(LS);state=load();save();renderAll();showView('today');toast('Fresh start');}}
 
