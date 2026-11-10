@@ -844,6 +844,10 @@ document.querySelectorAll('.tabbar button').forEach(b=>b.addEventListener('click
 document.getElementById('heroImg').style.backgroundImage='url('+window.__HERO__+')';
 renderAll();
 
-</script></body>
+</script>
+<script>
+try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',function(){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}});}}catch(e){}
+</script>
+</body>
 </html>
 
