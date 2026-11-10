@@ -707,7 +707,7 @@ function renderWeek(){
   if(WKSEL>=ws.length)WKSEL=0;
   const w=ws[WKSEL];
   const it=cur();
-  let h='<div class="pagetop" style="padding:0 0 4px"><h2>Program</h2><span class="sub">11 weeks &middot; 5-6 days/wk</span></div>';
+  let h='<div class="pagetop" style="padding:0 0 4px"><h2>Program</h2><span class="sub">'+ws.length+' weeks &middot; '+ws[0].days.filter(x=>!x.rest).length+' days/wk</span></div>';
   h+='<div class="wktabs">'+ws.map((x,i)=>'<button class="wktab'+(i===WKSEL?' on':'')+'" onclick="selWeek('+i+')">'+esc(x.label)+'</button>').join('')+'</div>';
   if(w.blurb)h+='<div class="salmonband">'+esc(w.blurb)+'</div>';
   h+='<div class="small" style="margin:2px 0 8px">'+esc(w.kind)+' week</div>';
