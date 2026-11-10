@@ -407,10 +407,11 @@ function strWrite(name,w,r,unit,src){
   const s=strLoad();const k=strKey(name);if(!k)return;
   const rec={w:parseFloat(w),r:parseFloat(r)||null,date:new Date().toISOString().slice(0,10),unit:unit||'lb',src:src};
   const cur=s.ex[k];
-  if(!cur||rec.w>cur.w||rec.date>cur.date){s.ex[k]=rec;try{localStorage.setItem(SQSTR,JSON.stringify(s));}catch(e){}}
+  if(!cur||rec.w>strConv(cur.w,cur.unit,rec.unit)||rec.date>cur.date){s.ex[k]=rec;try{localStorage.setItem(SQSTR,JSON.stringify(s));}catch(e){}}
 }
 function strLookup(name){return strLoad().ex[strKey(name)]||null;}
-function strToLast(name){const r=strLookup(name);return r?{bestW:r.w,allTop:false,sets:[],date:r.date,src:r.src}:null;}
+function strConv(w,from,to){from=from==='kg'?'kg':'lb';if(from===to)return w;return to==='kg'?w*0.45359237:w/0.45359237;}
+function strToLast(name){const r=strLookup(name);return r?{bestW:rnd(strConv(r.w,r.unit,state.set.unit)),allTop:false,sets:[],date:r.date,src:r.src}:null;}
 
 // --- progression engine ---
 // Primaries: %1RM fixed by the week (progression is periodized in). Accessories: double progression -
