@@ -369,7 +369,7 @@ function normState(s){
 }
 function load(){try{const s=normState(JSON.parse(localStorage.getItem(LS)));if(s)return s;}catch(e){}
   return defState();}
-function save(){localStorage.setItem(LS,JSON.stringify(state));}
+function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){setTimeout(function(){try{toast('Could not save (storage full or blocked) - export your data now');}catch(_){}},400);}}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2400);}
 
