@@ -393,7 +393,11 @@ function targetWeight(ex){
   const wlo=rnd(rm*lo/100),whi=rnd(rm*hi/100);
   return lo===hi?{w:wlo,label:fmtW(wlo)+' '+state.set.unit}:{w:wlo,whi,label:fmtW(wlo)+'-'+fmtW(whi)+' '+state.set.unit};
 }
-function repRange(r){let m=String(r).match(/^(\d+)-(\d+)$/);if(m)return[+m[1],+m[2]];m=String(r).match(/^(\d+)$/);if(m)return[+m[1],+m[1]];return null;}
+function repRange(r){let m=String(r).match(/^(\d+)-(\d+)$/);if(m)return[+m[1],+m[2]];m=String(r).match(/^(\d+)$/);if(m)return[+m[1],+m[1]];
+  // looser text: "6-8 per leg", "8-10 + 4-6" (first range), "4,6,8" / "5,4,3+" (lowest to highest), "8 /leg"
+  const s=String(r).trim();m=s.match(/^(\d+)\s*-\s*(\d+)\b/);if(m)return[+m[1],+m[2]];
+  if(/^[\d,+\s]+$/.test(s)&&/,/.test(s)){const n=s.match(/\d+/g).map(Number);return[Math.min(...n),Math.max(...n)];}
+  m=s.match(/^(\d+)\s*(?:\/|per\b|reps?\b|each\b)/i);if(m)return[+m[1],+m[1]];return null;}
 function e1rm(w,r){w=parseFloat(w);r=parseFloat(r);if(!w||!r)return 0;return r===1?w:w*(1+r/30);}
 function isBodyweightish(n){return /PULL-UP|CHIN-UP|DIP|PUSH-UP/.test(n);}
 
