@@ -350,8 +350,25 @@ for(let wk=1; wk<=10; wk++){
 // ===== APP =====
 const LS='pbbfb-v1';
 let state=load();
-function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.v===1)return s;}catch(e){}
-  return {v:1,pos:0,done:{},draft:{},lastByEx:{},history:[],vars:{},set:{unit:'lb',w10:'10A',rm:{squat:'',bench:'',deadlift:'',ohp:''}}};}
+function defState(){return {v:1,pos:0,done:{},draft:{},lastByEx:{},history:[],vars:{},set:{unit:'lb',w10:'10A',rm:{squat:'',bench:'',deadlift:'',ohp:''}}};}
+// merge a saved or imported state over the defaults; null if the shape is unusable
+function normState(s){
+  const isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+  if(!isO(s)||s.v!==1)return null;
+  for(const k of ['done','draft','lastByEx','vars','set'])if(s[k]!==undefined&&!isO(s[k]))return null;
+  if(s.history!==undefined&&!Array.isArray(s.history))return null;
+  if(s.pos!==undefined&&!(Number.isInteger(s.pos)&&s.pos>=0))return null;
+  if(s.history&&!s.history.every(h=>isO(h)&&Array.isArray(h.ex)&&h.ex.every(e=>isO(e)&&Array.isArray(e.sets))))return null;
+  if(s.lastByEx&&!Object.values(s.lastByEx).every(l=>isO(l)&&Array.isArray(l.sets)))return null;
+  if(s.draft&&!Object.values(s.draft).every(d=>isO(d)&&Object.values(d).every(e=>isO(e)&&Array.isArray(e.vals)&&Array.isArray(e.done))))return null;
+  const d=defState(),o=Object.assign(d,s);
+  o.set=Object.assign(defState().set,s.set||{});
+  o.set.rm=Object.assign(defState().set.rm,isO(o.set.rm)?o.set.rm:{});
+  if(o.set.unit!=='lb'&&o.set.unit!=='kg')o.set.unit='lb';
+  return o;
+}
+function load(){try{const s=normState(JSON.parse(localStorage.getItem(LS)));if(s)return s;}catch(e){}
+  return defState();}
 function save(){localStorage.setItem(LS,JSON.stringify(state));}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2400);}
@@ -794,7 +811,15 @@ function exportData(){
 }
 function importData(){
   const box=document.getElementById('ioBox');if(!box||!box.value.trim()){toast('Paste a backup into the box first');return;}
-  try{const s=JSON.parse(box.value);if(!s||s.v!==1)throw 0;state=s;save();renderAll();toast('Backup restored');}catch(e){toast('That backup did not parse');}
+  let raw,s=null;
+  try{raw=JSON.parse(box.value);s=normState(raw);}catch(e){}
+  if(!s||!Array.isArray(raw.history)||!raw.done||typeof raw.done!=='object'){toast('That is not a backup from this tracker - nothing was changed');return;}
+  const names=new Set();weeks().forEach(w=>w.days.forEach(d=>d.ex.forEach(e=>names.add(e.n))));
+  if(s.history.length&&!s.history.some(h=>h.ex.some(e=>names.has(e.n)))){toast('That backup is from a different program - nothing was changed');return;}
+  if(!confirm('Replace everything on this device with this backup ('+s.history.length+' logged workouts)? Your current data will be lost.'))return;
+  const old=state;
+  try{state=s;save();renderAll();toast('Backup restored');}
+  catch(e){state=old;try{save();renderAll();}catch(e2){}toast('Import failed - your previous data was kept');}
 }
 function resetAll(){if(confirm('Delete all logs, settings and progress on this device?')){localStorage.removeItem(LS);state=load();save();renderAll();showView('today');toast('Fresh start');}}
 
