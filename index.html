@@ -660,7 +660,7 @@ function seedVals(xi,ed,i){
   const x=exAt(xi);const sv=x?shownVals(x,ed,i):{w:'',r:''};
   ed.vals[i]={w:sv.w==null?'':sv.w,r:sv.r==null?'':sv.r};
 }
-function setVal(xi,i,f,v){const ed=draftFor(xi);seedVals(xi,ed,i);ed.vals[i][f]=v;save();}
+function setVal(xi,i,f,v){v=String(v).replace(/^(\s*\d+),(\d+\s*)$/,'$1.$2');const ed=draftFor(xi);seedVals(xi,ed,i);ed.vals[i][f]=v;save();}
 function setDone(xi,i,c){const ed=draftFor(xi);if(c)seedVals(xi,ed,i);ed.done[i]=c;save();if(c){var _ex=exAt(xi);if(_ex){var _s=parseRest(_ex.rest);if(_s>0)rtSet(_s,_ex.n,true);else rtSet(0,'NO REST - GO!',false);}}}
 function addSet(xi){const ed=draftFor(xi);ed.n=(ed.n||0)+1;save();renderWorkout();}
 function pickVar(n,label){state.vars[n]=label;save();renderWorkout();}
